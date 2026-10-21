@@ -70,7 +70,13 @@ $messages = array_values(array_filter(array_map('trim', $messages)));
         </div>
     </div>
 
-   <audio id="bgMusic" src="uploads/pepmau.mp3" loop></audio>
+    <?php
+        // Nhạc riêng của món quà, nếu không có thì dùng nhạc mặc định
+        $musicFile = (!empty($gift['music']) && file_exists(__DIR__ . '/' . $gift['music']))
+            ? $gift['music']
+            : 'uploads/pepmau.mp3';
+    ?>
+    <audio id="bgMusic" src="<?= htmlspecialchars($musicFile) ?>" loop preload="auto"></audio>
     <div class="music-control" onclick="toggleMusic()" id="musicBtn">🎵</div>
 
     <script>
@@ -157,49 +163,81 @@ $messages = array_values(array_filter(array_map('trim', $messages)));
         }
 
         // --- 6. Vũ trụ (Scene 5) ---
+        let universeStarted = false;
         function initUniverse() {
+            if (universeStarted) return;
+            universeStarted = true;
+
             const universe = document.getElementById('universe');
             const photoUrl = '<?= htmlspecialchars($gift['photo']) ?>';
-            const messages = <?= json_encode($messages, JSON_UNESCAPED_UNICODE) ?>;
+            const rawMessages = <?= json_encode($messages, JSON_UNESCAPED_UNICODE) ?>;
             const heartList = ['❤️','💖','💗','💕','🌸','✨','🦋'];
 
-            function createElement(type) {
+            // Cắt lời chúc thành các cụm ngắn để không bị dài và dính nhau
+            let phrases = [];
+            rawMessages.forEach(m => m.split(/[,;!?]/).forEach(p => {
+                p = p.trim();
+                if (p.length > 2) phrases.push(p);
+            }));
+            if (!phrases.length) phrases = ['Mãi vui vẻ nhé 💖'];
+
+            // Chia màn hình thành các làn dọc, mỗi làn chỉ chứa 1 món tại 1 thời điểm
+            const vw = window.innerWidth;
+            const laneCount = Math.max(2, Math.floor(vw / 200));
+            const laneW = vw / laneCount;
+
+            function spawn(type, lane, dur, delay) {
                 let el = document.createElement(type === 'img' ? 'img' : 'div');
-                let size = rand(60, 120);
-                let duration = rand(10, 20);
+                let x;
 
                 if (type === 'img') {
+                    let size = rand(60, Math.min(95, laneW - 20));
                     el.src = photoUrl;
                     el.className = 'floating-item';
                     el.style.width = size + 'px';
                     el.style.height = (size * 1.25) + 'px';
-                    el.style.setProperty('--r', rand(-14, 14) + 'deg');
-                } else if (type === 'heart') {
-                    el.className = 'floating-heart';
-                    el.innerText = pick(heartList);
-                    el.style.fontSize = rand(20, 40) + 'px';
-                    duration = rand(5, 10);
+                    el.style.setProperty('--r', rand(-12, 12) + 'deg');
+                    x = lane * laneW + rand(8, Math.max(9, laneW - size - 8));
                 } else {
                     el.className = 'floating-msg';
-                    el.innerText = messages.length ? pick(messages) : 'Mãi vui vẻ nhé! 💖';
-                    el.style.fontSize = rand(12, 20) + 'px';
+                    el.innerText = pick(phrases);
+                    el.style.fontSize = rand(13, 17) + 'px';
                     el.style.color = pick(['#ff9ab0', '#ffd1dc', '#fff', '#dcc7ff']);
-                    el.style.setProperty('--r', rand(-5, 5) + 'deg');
+                    el.style.maxWidth = (laneW - 20) + 'px';
+                    el.style.setProperty('--r', rand(-4, 4) + 'deg');
+                    x = lane * laneW + 8;
                 }
 
-                // Giữ phần tử nằm gọn trong màn hình (không tràn mép phải)
-                const vw = window.innerWidth;
-                const maxW = type === 'text' ? Math.min(vw * 0.78, 340) : (type === 'img' ? size : 40);
-                el.style.left = rand(8, Math.max(9, vw - maxW - 8)) + 'px';
-                el.style.animationDuration = duration + 's';
-                el.style.animationDelay = rand(0, 5) + 's';
-                el.addEventListener('animationend', () => { el.remove(); createElement(type); });
+                el.style.left = x + 'px';
+                el.style.animationDuration = dur + 's';
+                el.style.animationDelay = delay + 's';
+                // Tạo lại đúng làn, đúng tốc độ để khoảng cách giữa các món không bị lệch
+                el.addEventListener('animationend', () => { el.remove(); spawn(type, lane, dur, 0); });
                 universe.appendChild(el);
             }
 
-            for (let i = 0; i < 10; i++) createElement('img');
-            for (let i = 0; i < 24; i++) createElement('heart');
-            for (let i = 0; i < 8; i++) createElement('text');
+            // Mỗi làn có 1 ảnh và 1 câu chúc, so le nhau nửa chu kỳ
+            const lanes = [...Array(laneCount).keys()].sort(() => Math.random() - 0.5);
+            lanes.forEach((lane, i) => {
+                let dur = rand(16, 22);
+                let offset = (i / laneCount) * dur;
+                spawn('img', lane, dur, -offset);
+                spawn('text', lane, dur, -(offset + dur / 2));
+            });
+
+            // Tim bay tự do, nhỏ và nhẹ
+            function heart() {
+                let el = document.createElement('div');
+                el.className = 'floating-heart';
+                el.innerText = pick(heartList);
+                el.style.fontSize = rand(18, 34) + 'px';
+                el.style.left = rand(2, 96) + 'vw';
+                el.style.animationDuration = rand(6, 11) + 's';
+                el.style.animationDelay = -rand(0, 8) + 's';
+                el.addEventListener('animationend', () => { el.remove(); heart(); });
+                universe.appendChild(el);
+            }
+            for (let i = 0; i < 18; i++) heart();
         }
 
         // --- 7. Nhạc ---
